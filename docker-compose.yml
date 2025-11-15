@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agora_user
+      POSTGRES_PASSWORD: STRONG_PASSWORD
+      POSTGRES_DB: agora_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  socket-server:
+    build: ./services/socket-server
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: "postgresql://agora_user:STRONG_PASSWORD@db:5432/agora_db?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      SOCKET_PORT: 4000
+    ports:
+      - "4000:4000"
+
+  migrator:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - ./:/app
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: "postgresql://agora_user:STRONG_PASSWORD@db:5432/agora_db?schema=public"
+    entrypoint: ["/bin/sh", "-c"]
+    # Use `docker compose run --rm migrator "npm ci --omit=dev && npx prisma generate && npx prisma migrate dev --name init"`
+    command: ["tail", "-f", "/dev/null"]
+
+volumes:
+  pgdata:
